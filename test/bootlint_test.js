@@ -271,7 +271,6 @@ exports.bootlint = {
         test.done();
     },
     */
-    /*
     'btn/input sizing used without input-group-* size': function (test) {
         test.expect(1);
         test.deepEqual(lintHtml(utf8Fixture('input-group/missing-input-group-sizing.html')),
@@ -279,46 +278,30 @@ exports.bootlint = {
             'should complain when an input/btn sizes are used within input-group.');
         test.done();
     },
-    */
-    /*
-    'input groups with multiple form controls': function (test) {
-        test.expect(1);
-        test.deepEqual(lintHtml(utf8Fixture('input-group/multiple-form-controls.html')),
-            ['Input groups cannot contain multiple `.form-control`s'],
-            'should complain when an input group contains multiple form controls.');
-        test.done();
-    },
-    */
-    /*
     'mixing input groups with form groups': function (test) {
         test.expect(1);
         test.deepEqual(lintHtml(utf8Fixture('input-group/mixed-with-form-group.html')),
-            ['`.input-group` and `.form-group` cannot be used directly on the same element. Instead, nest the `.input-group` within the `.form-group`'],
-            'should complain when .input-group and .form-group are used on the same element.');
+            ['`.input-group` and `.form-group`/`.row`/`.form-row` cannot be used directly on the same element. Instead, nest the `.input-group` within the `.form-group`/`.row`/`.form-row`'],
+            'should complain when .input-group and .form-group/.row/.form-row are used on the same element.');
         test.done();
     },
-    */
-    /*
     'mixing input groups with grid columns': function (test) {
         test.expect(1);
         test.deepEqual(lintHtml(utf8Fixture('input-group/mixed-with-grid-col.html')),
-            ['`.input-group` and `.col-*-*` cannot be used directly on the same element. Instead, nest the `.input-group` within the `.col-*-*`'],
+            ['`.input-group` and `.col*` cannot be used directly on the same element. Instead, nest the `.input-group` within the `.col*`'],
             'should complain when an input group has a grid column class on it.');
         test.done();
     },
-    */
-    /*
     'input groups missing controls and addons': function (test) {
         test.expect(2);
         test.deepEqual(lintHtml(utf8Fixture('input-group/missing-input-group-addon.html')),
-            ['`.input-group` must have a `.form-control` and either an `.input-group-addon` or an `.input-group-btn`.'],
+            ['`.input-group` must have a `.form-control` and either an `.input-group-prepend` or `.input-group-append`.'],
             'should complain when missing missing a `.form-control`');
         test.deepEqual(lintHtml(utf8Fixture('input-group/missing-form-control.html')),
-            ['`.input-group` must have a `.form-control` and either an `.input-group-addon` or an `.input-group-btn`.'],
-            'should complain when missing missing a `.input-group-addon`');
+            ['`.input-group` must have a `.form-control` and either an `.input-group-prepend` or `.input-group-append`.'],
+            'should complain when missing missing a `.input-group-prepend`');
         test.done();
     },
-    */
     /*
     'non-column children of rows': function (test) {
         test.expect(2);
@@ -328,27 +311,6 @@ exports.bootlint = {
         test.deepEqual(lintHtml(utf8Fixture('grid/script-child-of-row.html')),
             [],
             'should not complain about <script> child of row');
-        test.done();
-    },
-    */
-    /*
-    'multiple columns on the same side of an input group': function (test) {
-        test.expect(5);
-        test.deepEqual(lintHtml(utf8Fixture('input-group/multiple-add-on-left.html')),
-            ['Having multiple add-ons on a single side of an input group is not supported'],
-            'should complain when multiple normal add-ons are on the left side of an input group.');
-        test.deepEqual(lintHtml(utf8Fixture('input-group/multiple-add-on-right.html')),
-            ['Having multiple add-ons on a single side of an input group is not supported'],
-            'should complain when multiple normal add-ons are on the right side of an input group.');
-        test.deepEqual(lintHtml(utf8Fixture('input-group/multiple-btn-add-on-left.html')),
-            ['Having multiple add-ons on a single side of an input group is not supported'],
-            'should complain when multiple button add-ons are on the left side of an input group.');
-        test.deepEqual(lintHtml(utf8Fixture('input-group/multiple-btn-add-on-right.html')),
-            ['Having multiple add-ons on a single side of an input group is not supported'],
-            'should complain when multiple button add-ons are on the right side of an input group.');
-        test.deepEqual(lintHtml(utf8Fixture('input-group/multiple-mixed-add-on-left.html')),
-            ['Having multiple add-ons on a single side of an input group is not supported'],
-            'should complain when both a normal add-on and a button add-on are on the left side of an input group.');
         test.done();
     },
     */
