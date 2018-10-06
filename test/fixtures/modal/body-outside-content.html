@@ -17,11 +17,18 @@
         <script src="../generic-qunit.js"></script>
     </head>
     <body>
-        <button type="button" data-toggle="modal" data-remote="http://example.invalid/modal.html" data-target="#myModal">Launch modal</button>
+        <div class="modal fade" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <!--Oops, forgot about the div.modal-content-->
+                <div class="modal-body">
+                    <p>One fine body&hellip;</p>
+                </div>
+            </div>
+        </div>
 
         <div id="qunit"></div>
         <ol id="bootlint">
-            <li data-lint="Found one or more modals using the deprecated `remote` option"></li>
+            <li data-lint="`.modal-body` must be a child of `.modal-content`"></li>
         </ol>
     </body>
 </html>
