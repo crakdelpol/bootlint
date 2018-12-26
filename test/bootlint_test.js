@@ -110,7 +110,6 @@ exports.bootlint = {
         test.done();
     },
     */
-    /*
     'rows outside containers': function (test) {
         test.expect(5);
         test.deepEqual(lintHtml(utf8Fixture('containers/fixed.html')),
@@ -130,25 +129,6 @@ exports.bootlint = {
             'should not complain when rows are descendants (but not children) of containers.');
         test.done();
     },
-    */
-    /*
-    'nested containers': function (test) {
-        test.expect(4);
-        test.deepEqual(lintHtml(utf8Fixture('containers/nested-fixed-fixed.html')),
-            ['Containers (`.container` and `.container-fluid`) are not nestable'],
-            'should complain when a container is within a container.');
-        test.deepEqual(lintHtml(utf8Fixture('containers/nested-fixed-fluid.html')),
-            ['Containers (`.container` and `.container-fluid`) are not nestable'],
-            'should complain when a container is within a container.');
-        test.deepEqual(lintHtml(utf8Fixture('containers/nested-fluid-fluid.html')),
-            ['Containers (`.container` and `.container-fluid`) are not nestable'],
-            'should complain when a container is within a container.');
-        test.deepEqual(lintHtml(utf8Fixture('containers/nested-fluid-fixed.html')),
-            ['Containers (`.container` and `.container-fluid`) are not nestable'],
-            'should complain when a container is within a container.');
-        test.done();
-    },
-    */
     /*
     'viewport meta tag': function (test) {
         test.expect(2);
@@ -171,7 +151,6 @@ exports.bootlint = {
             'should complain when .row and .col* are used on the same element.');
         test.done();
     },
-    /*
     'row and container classes on same element': function (test) {
         test.expect(2);
         test.deepEqual(lintHtml(utf8Fixture('containers/fixed-row-same-elem.html')),
