@@ -10808,7 +10808,10 @@ for (var i = 0; i < R; i++) {
 }
 
 exports.parse = parse;
-function parse(version, loose) {
+function parse(version, options) {
+  if (!options || typeof options !== 'object')
+    options = { loose: !!options, includePrerelease: false }
+
   if (version instanceof SemVer)
     return version;
 
@@ -10818,35 +10821,37 @@ function parse(version, loose) {
   if (version.length > MAX_LENGTH)
     return null;
 
-  var r = loose ? re[LOOSE] : re[FULL];
+  var r = options.loose ? re[LOOSE] : re[FULL];
   if (!r.test(version))
     return null;
 
   try {
-    return new SemVer(version, loose);
+    return new SemVer(version, options);
   } catch (er) {
     return null;
   }
 }
 
 exports.valid = valid;
-function valid(version, loose) {
-  var v = parse(version, loose);
+function valid(version, options) {
+  var v = parse(version, options);
   return v ? v.version : null;
 }
 
 
 exports.clean = clean;
-function clean(version, loose) {
-  var s = parse(version.trim().replace(/^[=v]+/, ''), loose);
+function clean(version, options) {
+  var s = parse(version.trim().replace(/^[=v]+/, ''), options);
   return s ? s.version : null;
 }
 
 exports.SemVer = SemVer;
 
-function SemVer(version, loose) {
+function SemVer(version, options) {
+  if (!options || typeof options !== 'object')
+    options = { loose: !!options, includePrerelease: false }
   if (version instanceof SemVer) {
-    if (version.loose === loose)
+    if (version.loose === options.loose)
       return version;
     else
       version = version.version;
@@ -10858,11 +10863,13 @@ function SemVer(version, loose) {
     throw new TypeError('version is longer than ' + MAX_LENGTH + ' characters')
 
   if (!(this instanceof SemVer))
-    return new SemVer(version, loose);
+    return new SemVer(version, options);
 
-  debug('SemVer', version, loose);
-  this.loose = loose;
-  var m = version.trim().match(loose ? re[LOOSE] : re[FULL]);
+  debug('SemVer', version, options);
+  this.options = options;
+  this.loose = !!options.loose;
+
+  var m = version.trim().match(options.loose ? re[LOOSE] : re[FULL]);
 
   if (!m)
     throw new TypeError('Invalid Version: ' + version);
@@ -10912,16 +10919,16 @@ SemVer.prototype.toString = function() {
 };
 
 SemVer.prototype.compare = function(other) {
-  debug('SemVer.compare', this.version, this.loose, other);
+  debug('SemVer.compare', this.version, this.options, other);
   if (!(other instanceof SemVer))
-    other = new SemVer(other, this.loose);
+    other = new SemVer(other, this.options);
 
   return this.compareMain(other) || this.comparePre(other);
 };
 
 SemVer.prototype.compareMain = function(other) {
   if (!(other instanceof SemVer))
-    other = new SemVer(other, this.loose);
+    other = new SemVer(other, this.options);
 
   return compareIdentifiers(this.major, other.major) ||
          compareIdentifiers(this.minor, other.minor) ||
@@ -10930,7 +10937,7 @@ SemVer.prototype.compareMain = function(other) {
 
 SemVer.prototype.comparePre = function(other) {
   if (!(other instanceof SemVer))
-    other = new SemVer(other, this.loose);
+    other = new SemVer(other, this.options);
 
   // NOT having a prerelease is > having one
   if (this.prerelease.length && !other.prerelease.length)
@@ -11221,19 +11228,23 @@ function cmp(a, op, b, loose) {
 }
 
 exports.Comparator = Comparator;
-function Comparator(comp, loose) {
+function Comparator(comp, options) {
+  if (!options || typeof options !== 'object')
+    options = { loose: !!options, includePrerelease: false }
+
   if (comp instanceof Comparator) {
-    if (comp.loose === loose)
+    if (comp.loose === !!options.loose)
       return comp;
     else
       comp = comp.value;
   }
 
   if (!(this instanceof Comparator))
-    return new Comparator(comp, loose);
+    return new Comparator(comp, options);
 
-  debug('comparator', comp, loose);
-  this.loose = loose;
+  debug('comparator', comp, options);
+  this.options = options;
+  this.loose = !!options.loose;
   this.parse(comp);
 
   if (this.semver === ANY)
@@ -11246,7 +11257,7 @@ function Comparator(comp, loose) {
 
 var ANY = {};
 Comparator.prototype.parse = function(comp) {
-  var r = this.loose ? re[COMPARATORLOOSE] : re[COMPARATOR];
+  var r = this.options.loose ? re[COMPARATORLOOSE] : re[COMPARATOR];
   var m = comp.match(r);
 
   if (!m)
@@ -11260,7 +11271,7 @@ Comparator.prototype.parse = function(comp) {
   if (!m[2])
     this.semver = ANY;
   else
-    this.semver = new SemVer(m[2], this.loose);
+    this.semver = new SemVer(m[2], this.options.loose);
 };
 
 Comparator.prototype.toString = function() {
@@ -11268,30 +11279,33 @@ Comparator.prototype.toString = function() {
 };
 
 Comparator.prototype.test = function(version) {
-  debug('Comparator.test', version, this.loose);
+  debug('Comparator.test', version, this.options.loose);
 
   if (this.semver === ANY)
     return true;
 
   if (typeof version === 'string')
-    version = new SemVer(version, this.loose);
+    version = new SemVer(version, this.options);
 
-  return cmp(version, this.operator, this.semver, this.loose);
+  return cmp(version, this.operator, this.semver, this.options);
 };
 
-Comparator.prototype.intersects = function(comp, loose) {
+Comparator.prototype.intersects = function(comp, options) {
   if (!(comp instanceof Comparator)) {
     throw new TypeError('a Comparator is required');
   }
 
+  if (!options || typeof options !== 'object')
+    options = { loose: !!options, includePrerelease: false }
+
   var rangeTmp;
 
   if (this.operator === '') {
-    rangeTmp = new Range(comp.value, loose);
-    return satisfies(this.value, rangeTmp, loose);
+    rangeTmp = new Range(comp.value, options);
+    return satisfies(this.value, rangeTmp, options);
   } else if (comp.operator === '') {
-    rangeTmp = new Range(this.value, loose);
-    return satisfies(comp.semver, rangeTmp, loose);
+    rangeTmp = new Range(this.value, options);
+    return satisfies(comp.semver, rangeTmp, options);
   }
 
   var sameDirectionIncreasing =
@@ -11305,11 +11319,11 @@ Comparator.prototype.intersects = function(comp, loose) {
     (this.operator === '>=' || this.operator === '<=') &&
     (comp.operator === '>=' || comp.operator === '<=');
   var oppositeDirectionsLessThan =
-    cmp(this.semver, '<', comp.semver, loose) &&
+    cmp(this.semver, '<', comp.semver, options) &&
     ((this.operator === '>=' || this.operator === '>') &&
     (comp.operator === '<=' || comp.operator === '<'));
   var oppositeDirectionsGreaterThan =
-    cmp(this.semver, '>', comp.semver, loose) &&
+    cmp(this.semver, '>', comp.semver, options) &&
     ((this.operator === '<=' || this.operator === '<') &&
     (comp.operator === '>=' || comp.operator === '>'));
 
@@ -11320,23 +11334,29 @@ Comparator.prototype.intersects = function(comp, loose) {
 
 
 exports.Range = Range;
-function Range(range, loose) {
+function Range(range, options) {
+  if (!options || typeof options !== 'object')
+    options = { loose: !!options, includePrerelease: false }
+
   if (range instanceof Range) {
-    if (range.loose === loose) {
+    if (range.loose === !!options.loose &&
+        range.includePrerelease === !!options.includePrerelease) {
       return range;
     } else {
-      return new Range(range.raw, loose);
+      return new Range(range.raw, options);
     }
   }
 
   if (range instanceof Comparator) {
-    return new Range(range.value, loose);
+    return new Range(range.value, options);
   }
 
   if (!(this instanceof Range))
-    return new Range(range, loose);
+    return new Range(range, options);
 
-  this.loose = loose;
+  this.options = options;
+  this.loose = !!options.loose;
+  this.includePrerelease = !!options.includePrerelease
 
   // First, split based on boolean or ||
   this.raw = range;
@@ -11366,9 +11386,8 @@ Range.prototype.toString = function() {
 };
 
 Range.prototype.parseRange = function(range) {
-  var loose = this.loose;
+  var loose = this.options.loose;
   range = range.trim();
-  debug('range', range, loose);
   // `1.2.3 - 1.2.4` => `>=1.2.3 <=1.2.4`
   var hr = loose ? re[HYPHENRANGELOOSE] : re[HYPHENRANGE];
   range = range.replace(hr, hyphenReplace);
@@ -11391,22 +11410,22 @@ Range.prototype.parseRange = function(range) {
 
   var compRe = loose ? re[COMPARATORLOOSE] : re[COMPARATOR];
   var set = range.split(' ').map(function(comp) {
-    return parseComparator(comp, loose);
-  }).join(' ').split(/\s+/);
-  if (this.loose) {
+    return parseComparator(comp, this.options);
+  }, this).join(' ').split(/\s+/);
+  if (this.options.loose) {
     // in loose mode, throw out any that are not valid comparators
     set = set.filter(function(comp) {
       return !!comp.match(compRe);
     });
   }
   set = set.map(function(comp) {
-    return new Comparator(comp, loose);
-  });
+    return new Comparator(comp, this.options);
+  }, this);
 
   return set;
 };
 
-Range.prototype.intersects = function(range, loose) {
+Range.prototype.intersects = function(range, options) {
   if (!(range instanceof Range)) {
     throw new TypeError('a Range is required');
   }
@@ -11415,7 +11434,7 @@ Range.prototype.intersects = function(range, loose) {
     return thisComparators.every(function(thisComparator) {
       return range.set.some(function(rangeComparators) {
         return rangeComparators.every(function(rangeComparator) {
-          return thisComparator.intersects(rangeComparator, loose);
+          return thisComparator.intersects(rangeComparator, options);
         });
       });
     });
@@ -11424,8 +11443,8 @@ Range.prototype.intersects = function(range, loose) {
 
 // Mostly just for testing and legacy API reasons
 exports.toComparators = toComparators;
-function toComparators(range, loose) {
-  return new Range(range, loose).set.map(function(comp) {
+function toComparators(range, options) {
+  return new Range(range, options).set.map(function(comp) {
     return comp.map(function(c) {
       return c.value;
     }).join(' ').trim().split(' ');
@@ -11435,15 +11454,15 @@ function toComparators(range, loose) {
 // comprised of xranges, tildes, stars, and gtlt's at this point.
 // already replaced the hyphen ranges
 // turn into a set of JUST comparators.
-function parseComparator(comp, loose) {
-  debug('comp', comp);
-  comp = replaceCarets(comp, loose);
+function parseComparator(comp, options) {
+  debug('comp', comp, options);
+  comp = replaceCarets(comp, options);
   debug('caret', comp);
-  comp = replaceTildes(comp, loose);
+  comp = replaceTildes(comp, options);
   debug('tildes', comp);
-  comp = replaceXRanges(comp, loose);
+  comp = replaceXRanges(comp, options);
   debug('xrange', comp);
-  comp = replaceStars(comp, loose);
+  comp = replaceStars(comp, options);
   debug('stars', comp);
   return comp;
 }
@@ -11458,14 +11477,16 @@ function isX(id) {
 // ~1.2, ~1.2.x, ~>1.2, ~>1.2.x --> >=1.2.0 <1.3.0
 // ~1.2.3, ~>1.2.3 --> >=1.2.3 <1.3.0
 // ~1.2.0, ~>1.2.0 --> >=1.2.0 <1.3.0
-function replaceTildes(comp, loose) {
+function replaceTildes(comp, options) {
   return comp.trim().split(/\s+/).map(function(comp) {
-    return replaceTilde(comp, loose);
+    return replaceTilde(comp, options);
   }).join(' ');
 }
 
-function replaceTilde(comp, loose) {
-  var r = loose ? re[TILDELOOSE] : re[TILDE];
+function replaceTilde(comp, options) {
+  if (!options || typeof options !== 'object')
+    options = { loose: !!options, includePrerelease: false }
+  var r = options.loose ? re[TILDELOOSE] : re[TILDE];
   return comp.replace(r, function(_, M, m, p, pr) {
     debug('tilde', comp, _, M, m, p, pr);
     var ret;
@@ -11499,15 +11520,17 @@ function replaceTilde(comp, loose) {
 // ^1.2, ^1.2.x --> >=1.2.0 <2.0.0
 // ^1.2.3 --> >=1.2.3 <2.0.0
 // ^1.2.0 --> >=1.2.0 <2.0.0
-function replaceCarets(comp, loose) {
+function replaceCarets(comp, options) {
   return comp.trim().split(/\s+/).map(function(comp) {
-    return replaceCaret(comp, loose);
+    return replaceCaret(comp, options);
   }).join(' ');
 }
 
-function replaceCaret(comp, loose) {
-  debug('caret', comp, loose);
-  var r = loose ? re[CARETLOOSE] : re[CARET];
+function replaceCaret(comp, options) {
+  debug('caret', comp, options);
+  if (!options || typeof options !== 'object')
+    options = { loose: !!options, includePrerelease: false }
+  var r = options.loose ? re[CARETLOOSE] : re[CARET];
   return comp.replace(r, function(_, M, m, p, pr) {
     debug('caret', comp, _, M, m, p, pr);
     var ret;
@@ -11554,16 +11577,18 @@ function replaceCaret(comp, loose) {
   });
 }
 
-function replaceXRanges(comp, loose) {
-  debug('replaceXRanges', comp, loose);
+function replaceXRanges(comp, options) {
+  debug('replaceXRanges', comp, options);
   return comp.split(/\s+/).map(function(comp) {
-    return replaceXRange(comp, loose);
+    return replaceXRange(comp, options);
   }).join(' ');
 }
 
-function replaceXRange(comp, loose) {
+function replaceXRange(comp, options) {
   comp = comp.trim();
-  var r = loose ? re[XRANGELOOSE] : re[XRANGE];
+  if (!options || typeof options !== 'object')
+    options = { loose: !!options, includePrerelease: false }
+  var r = options.loose ? re[XRANGELOOSE] : re[XRANGE];
   return comp.replace(r, function(ret, gtlt, M, m, p, pr) {
     debug('xRange', comp, ret, gtlt, M, m, p, pr);
     var xM = isX(M);
@@ -11627,8 +11652,8 @@ function replaceXRange(comp, loose) {
 
 // Because * is AND-ed with everything else in the comparator,
 // and '' means "any version", just remove the *s entirely.
-function replaceStars(comp, loose) {
-  debug('replaceStars', comp, loose);
+function replaceStars(comp, options) {
+  debug('replaceStars', comp, options);
   // Looseness is ignored here.  star is always as loose as it gets!
   return comp.trim().replace(re[STAR], '');
 }
@@ -11672,22 +11697,25 @@ Range.prototype.test = function(version) {
     return false;
 
   if (typeof version === 'string')
-    version = new SemVer(version, this.loose);
+    version = new SemVer(version, this.options);
 
   for (var i = 0; i < this.set.length; i++) {
-    if (testSet(this.set[i], version))
+    if (testSet(this.set[i], version, this.options))
       return true;
   }
   return false;
 };
 
-function testSet(set, version) {
+function testSet(set, version, options) {
   for (var i = 0; i < set.length; i++) {
     if (!set[i].test(version))
       return false;
   }
 
-  if (version.prerelease.length) {
+  if (!options)
+    options = {}
+
+  if (version.prerelease.length && !options.includePrerelease) {
     // Find the set of versions that are allowed to have prereleases
     // For example, ^1.2.3-pr.1 desugars to >=1.2.3-pr.1 <2.0.0
     // That should allow `1.2.3-pr.2` to pass.
@@ -11715,9 +11743,9 @@ function testSet(set, version) {
 }
 
 exports.satisfies = satisfies;
-function satisfies(version, range, loose) {
+function satisfies(version, range, options) {
   try {
-    range = new Range(range, loose);
+    range = new Range(range, options);
   } catch (er) {
     return false;
   }
@@ -11725,19 +11753,19 @@ function satisfies(version, range, loose) {
 }
 
 exports.maxSatisfying = maxSatisfying;
-function maxSatisfying(versions, range, loose) {
+function maxSatisfying(versions, range, options) {
   var max = null;
   var maxSV = null;
   try {
-    var rangeObj = new Range(range, loose);
+    var rangeObj = new Range(range, options);
   } catch (er) {
     return null;
   }
   versions.forEach(function (v) {
-    if (rangeObj.test(v)) { // satisfies(v, range, loose)
+    if (rangeObj.test(v)) { // satisfies(v, range, options)
       if (!max || maxSV.compare(v) === -1) { // compare(max, v, true)
         max = v;
-        maxSV = new SemVer(max, loose);
+        maxSV = new SemVer(max, options);
       }
     }
   })
@@ -11745,19 +11773,19 @@ function maxSatisfying(versions, range, loose) {
 }
 
 exports.minSatisfying = minSatisfying;
-function minSatisfying(versions, range, loose) {
+function minSatisfying(versions, range, options) {
   var min = null;
   var minSV = null;
   try {
-    var rangeObj = new Range(range, loose);
+    var rangeObj = new Range(range, options);
   } catch (er) {
     return null;
   }
   versions.forEach(function (v) {
-    if (rangeObj.test(v)) { // satisfies(v, range, loose)
+    if (rangeObj.test(v)) { // satisfies(v, range, options)
       if (!min || minSV.compare(v) === 1) { // compare(min, v, true)
         min = v;
-        minSV = new SemVer(min, loose);
+        minSV = new SemVer(min, options);
       }
     }
   })
@@ -11765,11 +11793,11 @@ function minSatisfying(versions, range, loose) {
 }
 
 exports.validRange = validRange;
-function validRange(range, loose) {
+function validRange(range, options) {
   try {
     // Return '*' instead of '' so that truthiness works.
     // This will throw if it's invalid anyway
-    return new Range(range, loose).range || '*';
+    return new Range(range, options).range || '*';
   } catch (er) {
     return null;
   }
@@ -11777,20 +11805,20 @@ function validRange(range, loose) {
 
 // Determine if version is less than all the versions possible in the range
 exports.ltr = ltr;
-function ltr(version, range, loose) {
-  return outside(version, range, '<', loose);
+function ltr(version, range, options) {
+  return outside(version, range, '<', options);
 }
 
 // Determine if version is greater than all the versions possible in the range.
 exports.gtr = gtr;
-function gtr(version, range, loose) {
-  return outside(version, range, '>', loose);
+function gtr(version, range, options) {
+  return outside(version, range, '>', options);
 }
 
 exports.outside = outside;
-function outside(version, range, hilo, loose) {
-  version = new SemVer(version, loose);
-  range = new Range(range, loose);
+function outside(version, range, hilo, options) {
+  version = new SemVer(version, options);
+  range = new Range(range, options);
 
   var gtfn, ltefn, ltfn, comp, ecomp;
   switch (hilo) {
@@ -11813,7 +11841,7 @@ function outside(version, range, hilo, loose) {
   }
 
   // If it satisifes the range it is not outside
-  if (satisfies(version, range, loose)) {
+  if (satisfies(version, range, options)) {
     return false;
   }
 
@@ -11832,9 +11860,9 @@ function outside(version, range, hilo, loose) {
       }
       high = high || comparator;
       low = low || comparator;
-      if (gtfn(comparator.semver, high.semver, loose)) {
+      if (gtfn(comparator.semver, high.semver, options)) {
         high = comparator;
-      } else if (ltfn(comparator.semver, low.semver, loose)) {
+      } else if (ltfn(comparator.semver, low.semver, options)) {
         low = comparator;
       }
     });
@@ -11858,15 +11886,15 @@ function outside(version, range, hilo, loose) {
 }
 
 exports.prerelease = prerelease;
-function prerelease(version, loose) {
-  var parsed = parse(version, loose);
+function prerelease(version, options) {
+  var parsed = parse(version, options);
   return (parsed && parsed.prerelease.length) ? parsed.prerelease : null;
 }
 
 exports.intersects = intersects;
-function intersects(r1, r2, loose) {
-  r1 = new Range(r1, loose)
-  r2 = new Range(r2, loose)
+function intersects(r1, r2, options) {
+  r1 = new Range(r1, options)
+  r2 = new Range(r2, options)
   return r1.intersects(r2)
 }
 
@@ -11923,29 +11951,31 @@ var parseUrl = require('url').parse;
 var semver = require('semver');
 var voidElements = require('void-elements');
 var _location = require('./location');
+
 var LocationIndex = _location.LocationIndex;
 
 (function (exports) {
     'use strict';
     var NUM_COLS = 12;
-    var COL_REGEX = /\bcol-(xs|sm|md|lg)-(\d{1,2})\b/;
-    var COL_REGEX_G = /\bcol-(xs|sm|md|lg)-(\d{1,2})\b/g;
+    var COL_REGEX = /\bcol(?:-(sm|md|lg|xl))?(?:-(auto|\d{1,2}))?\b/;
+    var COL_REGEX_G = /\bcol(?:-(sm|md|lg|xl))?(?:-(auto|\d{1,2}))?\b/g;
     var COL_CLASSES = [];
-    var SCREENS = ['xs', 'sm', 'md', 'lg'];
+    var SCREENS = ['', 'sm', 'md', 'lg', 'xl'];
     SCREENS.forEach(function (screen) {
-        for (var n = 1; n <= NUM_COLS; n++) {
-            COL_CLASSES.push('.col-' + screen + '-' + n);
+        for (var n = -1; n <= NUM_COLS; n++) {
+            COL_CLASSES.push('.col' + (screen && '-' + screen) + (n < 0 ? '' : '-' + (n || 'auto')));
         }
     });
     var SCREEN2NUM = {
-        xs: 0,
-        sm: 1,
-        md: 2,
-        lg: 3
+        '': 0,
+        'sm': 1,
+        'md': 2,
+        'lg': 3,
+        'xl': 4
     };
-    var NUM2SCREEN = ['xs', 'sm', 'md', 'lg'];
+    var NUM2SCREEN = ['', 'sm', 'md', 'lg', 'xl'];
     var IN_NODE_JS = Boolean(cheerio.load);
-    var MIN_JQUERY_VERSION = '1.9.1';   // as of Bootstrap v3.3.0
+    var MIN_JQUERY_VERSION = '1.9.1'; // as of Bootstrap v3.3.0
     var CURRENT_BOOTSTRAP_VERSION = '3.3.7';
     var BOOTSTRAP_VERSION_4 = '4.0.0';
     var PLUGINS = [
@@ -12043,11 +12073,11 @@ var LocationIndex = _location.LocationIndex;
         var width2screens = {};
         while (true) {
             var match = COL_REGEX_G.exec(classes);
-            if (!match) {
+            if (!match || !match[1] && !match[2]) {
                 break;
             }
-            var screen = match[1];
-            width = match[2];
+            var screen = match[1] || '';
+            width = match[2] || ''; // can also be 'auto'
             var screens = width2screens[width];
             if (!screens) {
                 screens = width2screens[width] = [];
@@ -12056,7 +12086,7 @@ var LocationIndex = _location.LocationIndex;
         }
 
         for (width in width2screens) {
-            if (width2screens.hasOwnProperty(width)) {
+            if (Object.prototype.hasOwnProperty.call(width2screens, 'width')) {
                 width2screens[width].sort(compareNums);
             }
         }
@@ -12229,7 +12259,7 @@ var LocationIndex = _location.LocationIndex;
         allLinters[id] = linterWrapper;
     }
 
-
+    /*
     addLinter('W001', function lintMetaCharsetUtf8($, reporter) {
         var meta = $('head>meta[charset]');
         var charset = meta.attr('charset');
@@ -12247,6 +12277,8 @@ var LocationIndex = _location.LocationIndex;
             reporter('charset `<meta>` tag is specifying a legacy, non-UTF-8 charset', meta);
         }
     });
+    */
+    /*
     addLinter('W002', function lintXUaCompatible($, reporter) {
         var meta = $([
             'head>meta[http-equiv="X-UA-Compatible"][content="IE=edge"]',
@@ -12256,18 +12288,24 @@ var LocationIndex = _location.LocationIndex;
             reporter('`<head>` is missing X-UA-Compatible `<meta>` tag that disables old IE compatibility modes');
         }
     });
+    */
+    /*
     addLinter('W003', function lintViewport($, reporter) {
         var meta = $('head>meta[name="viewport"][content]');
         if (!meta.length) {
             reporter('`<head>` is missing viewport `<meta>` tag that enables responsiveness');
         }
     });
+    */
+    /*
     addLinter('W004', function lintRemoteModals($, reporter) {
         var remoteModalTriggers = $('[data-toggle="modal"][data-remote]');
         if (remoteModalTriggers.length) {
             reporter('Found one or more modals using the deprecated `remote` option', remoteModalTriggers);
         }
     });
+    */
+    /*
     addLinter('W005', function lintJquery($, reporter) {
         var OLD_JQUERY = 'Found what might be an outdated version of jQuery; Bootstrap requires jQuery v' + MIN_JQUERY_VERSION + ' or higher';
         var NO_JQUERY_BUT_BS_JS = 'Unable to locate jQuery, which is required for Bootstrap\'s JavaScript plugins to work';
@@ -12276,14 +12314,14 @@ var LocationIndex = _location.LocationIndex;
         var hasBsJs = Boolean(bsScripts.minifieds.length || bsScripts.longhands.length);
         var theWindow = null;
         try {
-            /* eslint-disable no-undef, block-scoped-var */
+            // eslint-disable no-undef, block-scoped-var
             theWindow = window;
-            /* eslint-enable no-undef, block-scoped-var */
+            // eslint-enable no-undef, block-scoped-var
         } catch (e) {
             // deliberately do nothing
             // empty
         }
-        /* @covignore */
+        // @covignore
         if (theWindow) {
             // check browser global jQuery
             var globaljQuery = theWindow.$ || theWindow.jQuery;
@@ -12344,6 +12382,8 @@ var LocationIndex = _location.LocationIndex;
             }
         });
     });
+    */
+    /*
     addLinter('W006', function lintTooltipsOnDisabledElems($, reporter) {
         var selector = [
             '[disabled][data-toggle="tooltip"]',
@@ -12361,18 +12401,23 @@ var LocationIndex = _location.LocationIndex;
             );
         }
     });
+    */
+    /*
     addLinter('W007', function lintBtnType($, reporter) {
         var badBtnType = $('button:not([type="submit"], [type="reset"], [type="button"])');
         if (badBtnType.length) {
             reporter('Found one or more `<button>`s missing a `type` attribute.', badBtnType);
         }
     });
+    */
+    /*
     addLinter('W008', function lintTooltipsInBtnGroups($, reporter) {
         var nonBodyContainers = $('.btn-group [data-toggle="tooltip"]:not([data-container="body"]), .btn-group [data-toggle="popover"]:not([data-container="body"])');
         if (nonBodyContainers.length) {
             reporter('Tooltips and popovers within button groups should have their `container` set to `\'body\'`. Found tooltips/popovers that might lack this setting.', nonBodyContainers);
         }
     });
+    */
     addLinter('W009', function lintEmptySpacerCols($, reporter) {
         var selector = COL_CLASSES.map(function (colClass) {
             return colClass + ':not(:last-child)';
@@ -12388,23 +12433,18 @@ var LocationIndex = _location.LocationIndex;
                 return;
             }
 
-            var colClasses = column.attr('class').split(/\s+/g).filter(function (klass) {
-                return COL_REGEX.test(klass);
-            });
-            colClasses = sortedColumnClasses(colClasses.join(' ')).trim();
-
-            var colRegex = new RegExp('\\b(col-)(' + SCREENS.join('|') + ')(-\\d+)\\b', 'g');
-            var offsetClasses = colClasses.replace(colRegex, '$1$2-offset$3');
-
-            reporter('Using empty spacer columns isn\'t necessary with Bootstrap\'s grid. So instead of having an empty grid column with `class="' + colClasses + '"` , just add `class="' + offsetClasses + '"` to the next grid column.', column);
+            reporter('Using empty spacer columns isn\'t necessary with Bootstrap\'s grid.', column);
         });
     });
+    /*
     addLinter('W010', function lintMediaPulls($, reporter) {
         var mediaPulls = $('.media>.pull-left, .media>.pull-right');
         if (mediaPulls.length) {
             reporter('Using `.pull-left` or `.pull-right` as part of the media object component is deprecated as of Bootstrap v3.3.0. Use `.media-left` or `.media-right` instead.');
         }
     });
+    */
+    /*
     addLinter('W012', function lintNavbarContainers($, reporter) {
         var navBars = $('.navbar');
         var containers = [
@@ -12420,11 +12460,13 @@ var LocationIndex = _location.LocationIndex;
             }
         });
     });
+    */
+    /*
     addLinter('W013', function lintOutdatedBootstrap($, reporter) {
         var OUTDATED_BOOTSTRAP = 'Bootstrap version might be outdated. Latest version is at least ' + CURRENT_BOOTSTRAP_VERSION + ' ; saw what appears to be usage of Bootstrap ';
         var theWindow = getBrowserWindowObject();
         var globaljQuery = theWindow && (theWindow.$ || theWindow.jQuery);
-        /* @covignore */
+        // @covignore
         if (globaljQuery) {
             var versions = jqueryPluginVersions(globaljQuery);
             if (versions.length) {
@@ -12447,6 +12489,8 @@ var LocationIndex = _location.LocationIndex;
             }
         });
     });
+    */
+    /*
     addLinter('W014', function lintCarouselControls($, reporter) {
         var controls = $('.carousel-indicators > li, .carousel-control');
         controls.each(function (_index, cont) {
@@ -12459,12 +12503,14 @@ var LocationIndex = _location.LocationIndex;
             }
         });
     });
+    */
+    /*
     addLinter('W015', function lintNewBootstrap($, reporter) {
         var FUTURE_VERSION_ERROR = 'Detected what appears to be Bootstrap v4 or later. This version of Bootlint only supports Bootstrap v3.';
         var theWindow = getBrowserWindowObject();
 
         var globaljQuery = theWindow && (theWindow.$ || theWindow.jQuery);
-        /* @covignore */
+        // @covignore
         if (globaljQuery) {
             var versions = jqueryPluginVersions(globaljQuery);
             if (versions.length) {
@@ -12487,19 +12533,23 @@ var LocationIndex = _location.LocationIndex;
             }
         });
     });
+    */
+    /*
     addLinter('W016', function lintDisabledClassOnButton($, reporter) {
         var btnsWithDisabledClass = $('button.btn.disabled, input.btn.disabled');
         if (btnsWithDisabledClass.length) {
             reporter('Using the `.disabled` class on a `<button>` or `<input>` only changes the appearance of the element. It doesn\'t prevent the user from interacting with the element (for example, clicking on it or focusing it). If you want to truly disable the element, use the `disabled` attribute instead.', btnsWithDisabledClass);
         }
     });
+    */
+    /*
     addLinter('W017', function lintInputsMissingTypeAttr($, reporter) {
         var inputsMissingTypeAttr = $('input:not([type])');
         if (inputsMissingTypeAttr.length) {
             reporter('Found one or more `<input>`s missing a `type` attribute.', inputsMissingTypeAttr);
         }
     });
-
+    */
     addLinter('E001', (function () {
         var MISSING_DOCTYPE = 'Document is missing a DOCTYPE declaration';
         var NON_HTML5_DOCTYPE = 'Document declares a non-HTML5 DOCTYPE';
@@ -12520,7 +12570,7 @@ var LocationIndex = _location.LocationIndex;
             };
         }
 
-        /* @covignore */
+        // @covignore
         return function lintDoctype($, reporter) {
             /* eslint-disable no-undef, block-scoped-var */
             var doc = window.document;
@@ -12533,8 +12583,8 @@ var LocationIndex = _location.LocationIndex;
                 reporter(NON_HTML5_DOCTYPE);
             }
         };
-
     })());
+    /*
     addLinter('E002', function lintBootstrapv2($, reporter) {
         var columnClasses = [];
         for (var n = 1; n <= 12; n++) {
@@ -12546,6 +12596,8 @@ var LocationIndex = _location.LocationIndex;
             reporter('Found one or more uses of outdated Bootstrap v2 `.spanN` grid classes', spanNs);
         }
     });
+    */
+    /*
     addLinter('E003', function lintContainers($, reporter) {
         var notAnyColClass = COL_CLASSES.map(function (colClass) {
             return ':not(' + colClass + ')';
@@ -12566,12 +12618,15 @@ var LocationIndex = _location.LocationIndex;
             reporter('Found one or more `.row`s that were not children of a grid column or descendants of a `.container` or `.container-fluid`', rowsOutsideColumnsAndContainers);
         }
     });
+    */
+    /*
     addLinter('E004', function lintNestedContainers($, reporter) {
         var nestedContainers = $('.container, .container-fluid').children('.container, .container-fluid');
         if (nestedContainers.length) {
             reporter('Containers (`.container` and `.container-fluid`) are not nestable', nestedContainers);
         }
     });
+    */
     addLinter('E005', function lintRowAndColOnSameElem($, reporter) {
         var selector = COL_CLASSES.map(function (col) {
             return '.row' + col;
@@ -12579,9 +12634,10 @@ var LocationIndex = _location.LocationIndex;
 
         var rowCols = $(selector);
         if (rowCols.length) {
-            reporter('Found both `.row` and `.col-*-*` used on the same element', rowCols);
+            reporter('Found both `.row` and `.col*` used on the same element', rowCols);
         }
     });
+    /*
     addLinter('E006', function lintInputGroupFormControlTypes($, reporter) {
         var selectInputGroups = $('.input-group select');
         if (selectInputGroups.length) {
@@ -12592,12 +12648,16 @@ var LocationIndex = _location.LocationIndex;
             reporter('`.input-group` contains a `<textarea>`; only text-based `<input>`s are permitted in an `.input-group`', textareaInputGroups);
         }
     });
+    */
+    /*
     addLinter('E007', function lintBootstrapJs($, reporter) {
         var scripts = bootstrapScriptsIn($);
         if (scripts.longhands.length && scripts.minifieds.length) {
             reporter('Only one copy of Bootstrap\'s JS should be included; currently the webpage includes both bootstrap.js and bootstrap.min.js', scripts.longhands.add(scripts.minifieds));
         }
     });
+    */
+    /*
     addLinter('E009', function lintMissingInputGroupSizes($, reporter) {
         var selector = [
             '.input-group:not(.input-group-lg) .btn-lg',
@@ -12610,6 +12670,8 @@ var LocationIndex = _location.LocationIndex;
             reporter('Button and input sizing within `.input-group`s can cause issues. Instead, use input group sizing classes `.input-group-lg` or `.input-group-sm`', badInputGroupSizing);
         }
     });
+    */
+    /*
     addLinter('E010', function lintMultipleFormControlsInInputGroup($, reporter) {
         var badInputGroups = $('.input-group').filter(function (i, inputGroup) {
             return $(inputGroup).find('.form-control').length > 1;
@@ -12618,12 +12680,15 @@ var LocationIndex = _location.LocationIndex;
             reporter('Input groups cannot contain multiple `.form-control`s', badInputGroups);
         }
     });
+    */
+    /*
     addLinter('E011', function lintFormGroupMixedWithInputGroup($, reporter) {
         var badMixes = $('.input-group.form-group');
         if (badMixes.length) {
             reporter('`.input-group` and `.form-group` cannot be used directly on the same element. Instead, nest the `.input-group` within the `.form-group`', badMixes);
         }
     });
+    */
     addLinter('E012', function lintGridClassMixedWithInputGroup($, reporter) {
         var selector = COL_CLASSES.map(function (colClass) {
             return '.input-group' + colClass;
@@ -12631,30 +12696,32 @@ var LocationIndex = _location.LocationIndex;
 
         var badMixes = $(selector);
         if (badMixes.length) {
-            reporter('`.input-group` and `.col-*-*` cannot be used directly on the same element. Instead, nest the `.input-group` within the `.col-*-*`', badMixes);
+            reporter('`.input-group` and `.col*` cannot be used directly on the same element. Instead, nest the `.input-group` within the `.col*`', badMixes);
         }
     });
     addLinter('E013', function lintRowChildrenAreCols($, reporter) {
-        var ALLOWED_CHILDREN = COL_CLASSES.concat(['script', '.clearfix', '.bs-customizer-input']);
-        var selector = '.row>*' + ALLOWED_CHILDREN.map(function (colClass) {
+        var ALLOWED_CHILDREN = COL_CLASSES.concat(['script', '.clearfix']);
+        var disallowedChildren = ALLOWED_CHILDREN.map(function (colClass) {
             return ':not(' + colClass + ')';
         }).join('');
+        var selector = '.row>*' + disallowedChildren + ',.form-row>*' + disallowedChildren;
 
         var nonColRowChildren = $(selector);
         if (nonColRowChildren.length) {
-            reporter('Only columns (`.col-*-*`) may be children of `.row`s', nonColRowChildren);
+            reporter('Only columns (`.col*`) or `.clearfix` may be children of `.row`s or `.form-row`s', nonColRowChildren);
         }
     });
     addLinter('E014', function lintColParentsAreRowsOrFormGroups($, reporter) {
         var selector = COL_CLASSES.map(function (colClass) {
-            return '*:not(.row):not(.form-group)>' + colClass + ':not(col):not(th):not(td)';
+            return '*:not(.row):not(.form-row)>' + colClass + ':not(col):not(th):not(td)';
         }).join(',');
 
         var colsOutsideRowsAndFormGroups = $(selector);
         if (colsOutsideRowsAndFormGroups.length) {
-            reporter('Columns (`.col-*-*`) can only be children of `.row`s or `.form-group`s', colsOutsideRowsAndFormGroups);
+            reporter('Columns (`.col*`) can only be children of `.row`s or `.form-row`s', colsOutsideRowsAndFormGroups);
         }
     });
+    /*
     addLinter('E015', function lintInputGroupsWithMultipleAddOnsPerSide($, reporter) {
         var addOnClasses = ['.input-group-addon', '.input-group-btn'];
         var combos = [];
@@ -12669,12 +12736,16 @@ var LocationIndex = _location.LocationIndex;
             reporter('Having multiple add-ons on a single side of an input group is not supported', multipleAddOns);
         }
     });
+    */
+    /*
     addLinter('E016', function lintBtnToggle($, reporter) {
         var badBtnToggle = $('.btn.dropdown-toggle ~ .btn');
         if (badBtnToggle.length) {
             reporter('`.btn.dropdown-toggle` must be the last button in a button group.', badBtnToggle);
         }
     });
+    */
+    /*
     addLinter('E017', function lintBlockCheckboxes($, reporter) {
         var badCheckboxes = $('.checkbox').filter(function (i, div) {
             return $(div).filter(':has(>label>input[type="checkbox"])').length <= 0;
@@ -12683,6 +12754,8 @@ var LocationIndex = _location.LocationIndex;
             reporter('Incorrect markup used with the `.checkbox` class. The correct markup structure is `.checkbox>label>input[type="checkbox"]`', badCheckboxes);
         }
     });
+    */
+    /*
     addLinter('E018', function lintBlockRadios($, reporter) {
         var badRadios = $('.radio').filter(function (i, div) {
             return $(div).filter(':has(>label>input[type="radio"])').length <= 0;
@@ -12691,6 +12764,8 @@ var LocationIndex = _location.LocationIndex;
             reporter('Incorrect markup used with the `.radio` class. The correct markup structure is `.radio>label>input[type="radio"]`', badRadios);
         }
     });
+    */
+    /*
     addLinter('E019', function lintInlineCheckboxes($, reporter) {
         var wrongElems = $('.checkbox-inline:not(label)');
         if (wrongElems.length) {
@@ -12703,6 +12778,8 @@ var LocationIndex = _location.LocationIndex;
             reporter('Incorrect markup used with the `.checkbox-inline` class. The correct markup structure is `label.checkbox-inline>input[type="checkbox"]`', badStructures);
         }
     });
+    */
+    /*
     addLinter('E020', function lintInlineRadios($, reporter) {
         var wrongElems = $('.radio-inline:not(label)');
         if (wrongElems.length) {
@@ -12715,6 +12792,8 @@ var LocationIndex = _location.LocationIndex;
             reporter('Incorrect markup used with the `.radio-inline` class. The correct markup structure is `label.radio-inline>input[type="radio"]`', badStructures);
         }
     });
+    */
+    /*
     addLinter('E021', function lintButtonsCheckedActive($, reporter) {
         var selector = [
             '[data-toggle="buttons"]>label:not(.active)>input[type="checkbox"][checked]',
@@ -12727,6 +12806,8 @@ var LocationIndex = _location.LocationIndex;
             reporter('`.active` class used without the `checked` attribute (or vice-versa) in a button group using the button.js plugin', mismatchedButtonInputs);
         }
     });
+    */
+    /*
     addLinter('E022', function lintModalsWithinOtherComponents($, reporter) {
         var selector = [
             '.table .modal',
@@ -12737,36 +12818,48 @@ var LocationIndex = _location.LocationIndex;
             reporter('Modal markup should not be placed within other components, so as to avoid the component\'s styles interfering with the modal\'s appearance or functionality', badNestings);
         }
     });
-    addLinter('E023', function lintPanelBodyWithoutPanel($, reporter) {
-        var badPanelBody = $('.panel-body').parent(':not(.panel, .panel-collapse)');
-        if (badPanelBody.length) {
-            reporter('`.panel-body` must have a `.panel` or `.panel-collapse` parent', badPanelBody);
+    */
+    addLinter('E023', function lintCardBodyWithoutCard($, reporter) {
+        var badCardBody = $('.card-body').filter(function () {
+            return $(this).closest('.card').length !== 1;
+        });
+        if (badCardBody.length) {
+            reporter('`.card-body` must have `.card` or have it as an ancestor.', badCardBody);
         }
     });
-    addLinter('E024', function lintPanelHeadingWithoutPanel($, reporter) {
-        var badPanelHeading = $('.panel-heading').parent(':not(.panel)');
-        if (badPanelHeading.length) {
-            reporter('`.panel-heading` must have a `.panel` parent', badPanelHeading);
+    addLinter('E024', function lintCardHeaderWithoutCard($, reporter) {
+        var badCardHeader = $('.card-header').filter(function () {
+            return $(this).parents('.card').length !== 1;
+        });
+        if (badCardHeader.length) {
+            reporter('`.card-header` must have a `.card` ancestor.', badCardHeader);
         }
     });
-    addLinter('E025', function lintPanelFooterWithoutPanel($, reporter) {
-        var badPanelFooter = $('.panel-footer').parent(':not(.panel, .panel-collapse)');
-        if (badPanelFooter.length) {
-            reporter('`.panel-footer` must have a `.panel` or `.panel-collapse` parent', badPanelFooter);
+    addLinter('E025', function lintCardFooterWithoutCard($, reporter) {
+        var badCardFooter = $('.card-footer').filter(function () {
+            return $(this).parents('.card').length !== 1;
+        });
+        if (badCardFooter.length) {
+            reporter('`.card-footer` must have a `.card` ancestor.', badCardFooter);
         }
     });
-    addLinter('E026', function lintPanelTitleWithoutPanelHeading($, reporter) {
-        var badPanelTitle = $('.panel-title').parent(':not(.panel-heading)');
-        if (badPanelTitle.length) {
-            reporter('`.panel-title` must have a `.panel-heading` parent', badPanelTitle);
+    addLinter('E026', function lintCardTitleWithoutCard($, reporter) {
+        var badCardTitle = $('.card-title').filter(function () {
+            return $(this).parents('.card').length !== 1;
+        });
+        if (badCardTitle.length) {
+            reporter('`.card-title` must have a `.card` ancestor.', badCardTitle);
         }
     });
+    /*
     addLinter('E027', function lintTableResponsive($, reporter) {
         var badStructure = $('.table.table-responsive, table.table-responsive');
         if (badStructure.length) {
             reporter('`.table-responsive` is supposed to be used on the table\'s parent wrapper `<div>`, not on the table itself', badStructure);
         }
     });
+    */
+    /*
     addLinter('E028', function lintFormControlFeedbackWithoutHasFeedback($, reporter) {
         var ancestorsMissingClasses = $('.form-control-feedback').filter(function () {
             return $(this).closest('.form-group.has-feedback').length !== 1;
@@ -12775,6 +12868,7 @@ var LocationIndex = _location.LocationIndex;
             reporter('`.form-control-feedback` must have a `.form-group.has-feedback` ancestor', ancestorsMissingClasses);
         }
     });
+    */
     addLinter('E029', function lintRedundantColumnClasses($, reporter) {
         var columns = $(COL_CLASSES.join(','));
         columns.each(function (_index, col) {
@@ -12783,27 +12877,26 @@ var LocationIndex = _location.LocationIndex;
             var simplifiedClasses = classes;
             var width2screens = width2screensFor(classes);
             var isRedundant = false;
-            for (var width = 1; width <= NUM_COLS; width++) {
-                var screens = width2screens[width];
-                if (!screens) {
-                    continue;
-                }
-                var runs = incrementingRunsFrom(screens);
-                if (!runs.length) {
-                    continue;
-                }
+            for (var width in width2screens) {
+                if (Object.prototype.hasOwnProperty.call(width2screens, width)) {
+                    var screens = width2screens[width];
+                    var runs = incrementingRunsFrom(screens);
+                    if (!runs.length) {
+                        continue;
+                    }
 
-                isRedundant = true;
+                    isRedundant = true;
 
-                for (var i = 0; i < runs.length; i++) {
-                    var run = runs[i];
-                    var min = run[0];
-                    var max = run[1];
+                    for (var i = 0; i < runs.length; i++) {
+                        var run = runs[i];
+                        var min = run[0];
+                        var max = run[1];
 
-                    // remove redundant classes
-                    for (var screenNum = min + 1; screenNum <= max; screenNum++) {
-                        var colClass = 'col-' + NUM2SCREEN[screenNum] + '-' + width;
-                        simplifiedClasses = withoutClass(simplifiedClasses, colClass);
+                        // remove redundant classes
+                        for (var screenNum = min + 1; screenNum <= max; screenNum++) {
+                            var colClass = 'col' + (NUM2SCREEN[screenNum] && '-' + NUM2SCREEN[screenNum]) + (width && '-' + width);
+                            simplifiedClasses = withoutClass(simplifiedClasses, colClass);
+                        }
                     }
                 }
             }
@@ -12822,6 +12915,7 @@ var LocationIndex = _location.LocationIndex;
             );
         });
     });
+    /*
     addLinter('E030', function lintSoloGlyphiconClasses($, reporter) {
         var missingGlyphiconClass = $('[class*="glyphicon-"]:not(.glyphicon):not(.glyphicon-class)').filter(function () {
             return /\bglyphicon-([a-zA-Z]+)\b/.test($(this).attr('class'));
@@ -12830,12 +12924,16 @@ var LocationIndex = _location.LocationIndex;
             reporter('Found elements with a `.glyphicon-*` class that were missing the additional required `.glyphicon` class.', missingGlyphiconClass);
         }
     });
+    */
+    /*
     addLinter('E031', function lintGlyphiconOnNonEmptyElement($, reporter) {
         var glyphiconNotEmpty = $('.glyphicon:not(:empty)');
         if (glyphiconNotEmpty.length) {
             reporter('Glyphicon classes must only be used on elements that contain no text content and have no child elements.', glyphiconNotEmpty);
         }
     });
+    */
+    /*
     addLinter('E032', function lintModalStructure($, reporter) {
         var elements;
 
@@ -12869,12 +12967,16 @@ var LocationIndex = _location.LocationIndex;
             reporter('`.modal-title` must be a child of `.modal-header`', elements);
         }
     });
+    */
+    /*
     addLinter('E033', function lintAlertMissingDismissible($, reporter) {
         var alertsMissingDismissible = $('.alert:not(.alert-dismissible):has([data-dismiss="alert"])');
         if (alertsMissingDismissible.length) {
             reporter('`.alert` with dismiss button must have class `.alert-dismissible`', alertsMissingDismissible);
         }
     });
+    */
+    /*
     addLinter('E034', function lintAlertDismissStructure($, reporter) {
         var nonFirstChildCloses = $('.alert>.close:not(:first-child)');
         var closesPrecededByText = $('.alert>.close').filter(function () {
@@ -12887,21 +12989,25 @@ var LocationIndex = _location.LocationIndex;
             reporter('`.close` button for `.alert` must be the first element in the `.alert`', problematicCloses);
         }
     });
+    */
+    /*
     addLinter('E035', function lintFormGroupWithFormClass($, reporter) {
         var badFormGroups = $('.form-group.form-inline, .form-group.form-horizontal');
         if (badFormGroups.length) {
             reporter('Neither `.form-inline` nor `.form-horizontal` should be used directly on a `.form-group`. Instead, nest the `.form-group` within the `.form-inline` or `.form-horizontal`', badFormGroups);
         }
     });
+    */
     addLinter('E037', function lintColZeros($, reporter) {
         var selector = SCREENS.map(function (screen) {
-            return '.col-' + screen + '-0';
+            return '.col' + (screen && '-' + screen) + '-0';
         }).join(',');
         var elements = $(selector);
         if (elements.length) {
-            reporter('Column widths must be positive integers (and <= 12 by default). Found usage(s) of invalid nonexistent `.col-*-0` classes.', elements);
+            reporter('Column widths must be positive integers (and <= 12 by default). Found usage(s) of invalid nonexistent `.col*-0` classes.', elements);
         }
     });
+    /*
     addLinter('E038', function lintMediaPulls($, reporter) {
         var mediaPullsOutsideMedia = $('.media-left, .media-right').filter(function () {
             return !$(this).parent().closest('.media').length;
@@ -12910,6 +13016,8 @@ var LocationIndex = _location.LocationIndex;
             reporter('`.media-left` and `.media-right` should not be used outside of `.media` objects.', mediaPullsOutsideMedia);
         }
     });
+    */
+    /*
     addLinter('E039', function lintNavbarPulls($, reporter) {
         var navbarPullsOutsideNavbars = $('.navbar-left, .navbar-right').filter(function () {
             return !$(this).parent().closest('.navbar').length;
@@ -12918,12 +13026,16 @@ var LocationIndex = _location.LocationIndex;
             reporter('`.navbar-left` and `.navbar-right` should not be used outside of navbars.', navbarPullsOutsideNavbars);
         }
     });
+    */
+    /*
     addLinter('E040', function lintModalHide($, reporter) {
         var modalsWithHide = $('.modal.hide');
         if (modalsWithHide.length) {
             reporter('`.hide` should not be used on `.modal` in Bootstrap v3.', modalsWithHide);
         }
     });
+    */
+    /*
     addLinter('E041', function lintCarouselStructure($, reporter) {
         var carouselsWithWrongInners = $('.carousel').filter(function () {
             return $(this).children('.carousel-inner').length !== 1;
@@ -12939,6 +13051,8 @@ var LocationIndex = _location.LocationIndex;
             reporter('`.carousel-inner` must have exactly one `.item.active` child.', innersWithWrongActiveItems);
         }
     });
+    */
+    /*
     addLinter('E042', function lintFormControlOnWrongControl($, reporter) {
         var formControlsOnWrongTags = $('.form-control:not(input,textarea,select)');
         if (formControlsOnWrongTags.length) {
@@ -12965,12 +13079,16 @@ var LocationIndex = _location.LocationIndex;
             reporter('`.form-control` cannot be used on non-textual `<input>`s, such as those whose `type` is: `file`, `checkbox`, `radio`, `range`, `button`', formControlsOnWrongTypes);
         }
     });
+    */
+    /*
     addLinter('E043', function lintNavbarNavAnchorButtons($, reporter) {
         var navbarNavAnchorBtns = $('.navbar-nav a.btn, .navbar-nav a.navbar-btn');
         if (navbarNavAnchorBtns.length) {
             reporter('Button classes (`.btn`, `.btn-*`, `.navbar-btn`) cannot be used on `<a>`s within `.navbar-nav`s.', navbarNavAnchorBtns);
         }
     });
+    */
+    /*
     addLinter('E044', function lintInputGroupAddonChildren($, reporter) {
         var badInputGroups = $('.input-group').filter(function () {
             var inputGroup = $(this);
@@ -12980,49 +13098,62 @@ var LocationIndex = _location.LocationIndex;
             reporter('`.input-group` must have a `.form-control` and either an `.input-group-addon` or an `.input-group-btn`.', badInputGroups);
         }
     });
+    */
+    /*
     addLinter('E045', function lintImgResponsiveOnNonImgs($, reporter) {
         var imgResponsiveNotOnImg = $('.img-responsive:not(img)');
         if (imgResponsiveNotOnImg.length) {
             reporter('`.img-responsive` should only be used on `<img>`s', imgResponsiveNotOnImg);
         }
     });
+    */
+    /*
     addLinter('E046', function lintModalTabIndex($, reporter) {
         var modalsWithoutTabindex = $('.modal:not([tabindex])');
         if (modalsWithoutTabindex.length) {
             reporter('`.modal` elements must have a `tabindex` attribute.', modalsWithoutTabindex);
         }
     });
+    */
+    /*
     addLinter('E047', function lintBtnElements($, reporter) {
         var btns = $('.btn:not(a,button,input,label)');
         if (btns.length) {
             reporter('`.btn` should only be used on `<a>`, `<button>`, `<input>`, or `<label>` elements.', btns);
         }
     });
+    */
+    /*
     addLinter('E048', function lintModalRole($, reporter) {
         var modals = $('.modal:not([role="dialog"])');
         if (modals.length) {
             reporter('`.modal` must have a `role="dialog"` attribute.', modals);
         }
     });
+    */
+    /*
     addLinter('E049', function lintModalDialogRole($, reporter) {
         var modalDialogs = $('.modal-dialog:not([role="document"])');
         if (modalDialogs.length) {
             reporter('`.modal-dialog` must have a `role="document"` attribute.', modalDialogs);
         }
     });
+    */
+    /*
     addLinter('E050', function lintNestedFormGroups($, reporter) {
         var nestedFormGroups = $('.form-group > .form-group');
         if (nestedFormGroups.length) {
             reporter('`.form-group`s should not be nested.', nestedFormGroups);
         }
     });
+    */
     addLinter('E051', function lintColumnsNoFloats($, reporter) {
         var pullSelector = COL_CLASSES.map(function (col) {
-            return '.pull-left' + col + ',.pull-right' + col;
+            return '.float-left' + col + ',.float-right' + col;
         }).join(',');
         var pulledCols = $(pullSelector);
         if (pulledCols.length) {
-            reporter('`.pull-right` and `.pull-left` must not be used on `.col-*-*` elements', pulledCols);
+            reporter('`.float-right` and `.float-left` must not be used on `.col*` elements', pulledCols);
         }
         var styledSelector = COL_CLASSES.map(function (col) {
             return col + '[style]';
@@ -13032,13 +13163,13 @@ var LocationIndex = _location.LocationIndex;
             return /float\s*:\s*[a-z]+/i.test($(el).attr('style'));
         });
         if (styledCols.length) {
-            reporter('Manually added `float` styles must not be added on `.col-*-*` elements', styledCols);
+            reporter('Manually added `float` styles must not be added on `.col*` elements', styledCols);
         }
     });
     addLinter('E052', function lintRowsNoFloats($, reporter) {
-        var pulledRows = $('.row.pull-right, .row.pull-left');
+        var pulledRows = $('.row.float-right, .row.float-left');
         if (pulledRows.length) {
-            reporter('`.pull-right` and `.pull-left` must not be used on `.row` elements', pulledRows);
+            reporter('`.float-right` and `.float-left` must not be used on `.row` elements', pulledRows);
         }
         var styledRows = $('.row[style]').filter(function (i, el) {
             //test for `float:*` in the style attribute
